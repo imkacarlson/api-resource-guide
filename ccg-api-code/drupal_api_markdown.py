@@ -97,6 +97,29 @@ def normalize_content_for_comparison(content):
     return "\n".join(normalized_lines)
 
 
+def trailing_whitespace(text):
+    """Return the run of whitespace at the end of ``text`` (empty if none)."""
+    for i in range(len(text) - 1, -1, -1):
+        if text[i] not in " \t\n\r":
+            return text[i + 1:]
+    return text
+
+
+def reattach_trailing_boundary(content, reference):
+    """Replace ``content``'s trailing whitespace with ``reference``'s.
+
+    Each tabbed clarification block in the template ends with a tab-only blank
+    line immediately before the next column-0 boundary line (e.g. ``!!! example``
+    or ``*Additional Clarifications*``). Freshly fetched content does not carry
+    that boundary, so we restore it from the existing block to keep the following
+    template line at column 0 with its blank-line separator intact.
+    """
+    for i in range(len(content) - 1, -1, -1):
+        if content[i] not in " \t\n\r":
+            return content[:i + 1] + trailing_whitespace(reference)
+    return content
+
+
 def preserve_existing_formatting(existing_content, new_content, tabbed):
     existing_normalized = normalize_content_for_comparison(existing_content)
     new_normalized = normalize_content_for_comparison(new_content)
@@ -127,26 +150,9 @@ def preserve_existing_formatting(existing_content, new_content, tabbed):
     merged = "".join(merged_lines)
 
     if normalize_content_for_comparison(merged) == new_normalized:
-        return merged
+        return reattach_trailing_boundary(merged, existing_content)
 
-    last_nonwhite_pos = -1
-    for i in range(len(existing_content) - 1, -1, -1):
-        if existing_content[i] not in " \t\n\r":
-            last_nonwhite_pos = i
-            break
-
-    if last_nonwhite_pos >= 0:
-        trailing_whitespace = existing_content[last_nonwhite_pos + 1:]
-        new_last_nonwhite_pos = -1
-        for i in range(len(new_content) - 1, -1, -1):
-            if new_content[i] not in " \t\n\r":
-                new_last_nonwhite_pos = i
-                break
-        if new_last_nonwhite_pos >= 0:
-            new_content_meaningful = new_content[:new_last_nonwhite_pos + 1]
-            return new_content_meaningful + trailing_whitespace
-
-    return new_content
+    return reattach_trailing_boundary(new_content, existing_content)
 
 
 def resolve_endpoint(criterion):
